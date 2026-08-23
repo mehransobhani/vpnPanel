@@ -101,6 +101,57 @@ ok "داکر $(docker version --format '{{.Server.Version}}') آماده است"
 
 [ -f .env ] || { cp .env.example .env; ok ".env از روی .env.example ساخته شد"; }
 
+# ── حافظه ────────────────────────────────────────────────────────────────
+mem_total=$(awk '/MemTotal/{print int($2/1024)}' /proc/meminfo 2>/dev/null || echo 0)
+mem_avail=$(awk '/MemAvailable/{print int($2/1024)}' /proc/meminfo 2>/dev/null || echo 0)
+swap_total=$(awk '/SwapTotal/{print int($2/1024)}' /proc/meminfo 2>/dev/null || echo 0)
+
+echo "  رم: ${mem_total}MB کل، ${mem_avail}MB آزاد، ${swap_total}MB swap"
+
+if [ "$mem_total" -lt 2600 ]; then
+    warn "سرور کم‌رم است — پنل با تنظیمات سبک اجرا می‌شود."
+    env_set MYSQL_BUFFER_POOL 48M
+    env_set MYSQL_MEM 256m
+    env_set APP_MEM 192m
+    env_set WORKER_MEM 192m
+    env_set REDIS_MEM 32mb
+fi
+
+if [ "$swap_total" -eq 0 ] && [ "$mem_total" -lt 3000 ]; then
+    echo
+    bad "این سرور swap ندارد و رم کم است — کانتینرها با OOM کشته می‌شوند."
+    echo "     ساخت ۲ گیگابایت swap این مشکل را حل می‌کند:"
+    echo "       ${c_dim}fallocate -l 2G /swapfile && chmod 600 /swapfile${c_0}"
+    echo "       ${c_dim}mkswap /swapfile && swapon /swapfile${c_0}"
+    echo "       ${c_dim}echo '/swapfile none swap sw 0 0' >> /etc/fstab${c_0}"
+    echo
+
+    if [ "$(id -u)" = "0" ] && [ -t 0 ]; then
+        read -r -p "  همین حالا ساخته شود؟ [y/N] " answer
+        case "$answer" in
+            [yY]*)
+                if fallocate -l 2G /swapfile 2>/dev/null || dd if=/dev/zero of=/swapfile bs=1M count=2048 status=none; then
+                    chmod 600 /swapfile
+                    mkswap /swapfile >/dev/null
+                    swapon /swapfile
+                    grep -q '^/swapfile' /etc/fstab 2>/dev/null || echo '/swapfile none swap sw 0 0' >> /etc/fstab
+                    ok "۲ گیگابایت swap ساخته و فعال شد"
+                    swap_total=2048
+                else
+                    warn "ساخت swap ناموفق بود — فضای دیسک را بررسی کنید."
+                fi
+                ;;
+            *) warn "بدون swap ادامه می‌دهیم — احتمال شکست بالاست." ;;
+        esac
+    else
+        warn "دستورهای بالا را اجرا کنید و دوباره امتحان کنید."
+    fi
+fi
+
+if [ "$mem_avail" -lt 250 ] && [ "$swap_total" -eq 0 ]; then
+    die "فقط ${mem_avail}MB رم آزاد است. اول swap بسازید یا سرویس‌های دیگر را متوقف کنید."
+fi
+
 # ── ۲) انتخاب پورت‌ها ────────────────────────────────────────────────────
 head_ "۲/۶ انتخاب پورت‌های آزاد"
 
@@ -152,6 +203,13 @@ bring_up() {
 
         # تطبیق با الگوی bash — نه با لوله، تا SIGPIPE نتیجه را خراب نکند.
         case "$out" in
+            *"Cannot allocate memory"*|*"OOM"*|*"out of memory"*|*"killed"*|*"Killed"*)
+                echo
+                bad "کمبود حافظه. رم آزاد: ${mem_avail}MB، swap: ${swap_total}MB"
+                echo "     یا swap بسازید یا سرویس‌های دیگر سرور را موقتاً متوقف کنید."
+                printf '%s\n' "$out" | tail -10
+                return 1
+                ;;
             *"already allocated"*|*"address already in use"*|*"Address already in use"*)
                 warn "پورت $p اشغال بود — پورت بعدی امتحان می‌شود."
                 compose down --remove-orphans >/dev/null 2>&1 || true

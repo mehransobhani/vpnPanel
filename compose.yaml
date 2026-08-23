@@ -5,6 +5,7 @@ services:
       dockerfile: docker/php/Dockerfile
     image: vpnpanel-app
     restart: unless-stopped
+    mem_limit: ${APP_MEM:-256m}
     volumes:
       - .:/var/www/html
     depends_on:
@@ -23,6 +24,7 @@ services:
   nginx:
     image: nginx:1.27-alpine
     restart: unless-stopped
+    mem_limit: 64m
     ports:
       # APP_BIND را روی 127.0.0.1 بگذارید تا پنل فقط از طریق
       # ریورس‌پروکسی خودتان (nginx/Caddy) در دسترس باشد.
@@ -38,6 +40,7 @@ services:
   worker:
     image: vpnpanel-app
     restart: unless-stopped
+    mem_limit: ${WORKER_MEM:-256m}
     command: ["supervisord", "-c", "/etc/supervisor/supervisord.conf"]
     volumes:
       - .:/var/www/html
@@ -51,6 +54,7 @@ services:
   xray:
     image: ghcr.io/xtls/xray-core:latest
     restart: unless-stopped
+    mem_limit: 128m
     profiles: ["vpn"]
     volumes:
       - ./docker/xray:/usr/local/etc/xray:ro
@@ -62,6 +66,15 @@ services:
   mysql:
     image: mysql:8.4
     restart: unless-stopped
+    # تنظیم برای سرورهای کم‌رم: پیش‌فرض MySQL حدود ۴۰۰ مگ می‌گیرد.
+    command: >
+      --innodb-buffer-pool-size=${MYSQL_BUFFER_POOL:-64M}
+      --innodb-log-buffer-size=8M
+      --performance-schema=OFF
+      --max-connections=60
+      --table-open-cache=64
+      --host-cache-size=0
+    mem_limit: ${MYSQL_MEM:-320m}
     environment:
       MYSQL_DATABASE: ${DB_DATABASE:-vpnpanel}
       MYSQL_USER: ${DB_USERNAME:-vpnpanel}
@@ -79,7 +92,15 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
-    command: ["redis-server", "--appendonly", "yes"]
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --maxmemory
+      - ${REDIS_MEM:-64mb}
+      - --maxmemory-policy
+      - allkeys-lru
+    mem_limit: 96m
     volumes:
       - redis-data:/data
     networks: [panel]

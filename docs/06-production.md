@@ -191,6 +191,44 @@ cp docker/xray/config.json /backups/xray-config-$(date +%F).json
 
 ---
 
+## سرور کم‌رم
+
+پنل با تنظیمات سبک حدود **۳۰۰ مگابایت** می‌گیرد:
+
+| سرویس | مصرف |
+|---|---|
+| mysql | ~۱۴۰MB |
+| worker | ~۱۱۰MB |
+| xray | ~۱۵MB |
+| app / nginx / redis | ~۳۵MB |
+
+سقف‌ها در `.env` قابل تنظیم‌اند (`MYSQL_MEM`، `APP_MEM`، `WORKER_MEM`، `REDIS_MEM`)
+و `install.sh` روی سرورهای زیر ۲.۵ گیگ خودکار کمشان می‌کند.
+
+### swap اجباری است
+
+روی VPS دو گیگی، مخصوصاً اگر پروژهٔ دیگری هم دارید، بدون swap کانتینرها
+با OOM کشته می‌شوند:
+
+```bash
+fallocate -l 2G /swapfile
+chmod 600 /swapfile
+mkswap /swapfile && swapon /swapfile
+echo '/swapfile none swap sw 0 0' >> /etc/fstab
+```
+
+`install.sh` نبودن swap را تشخیص می‌دهد و پیشنهاد ساختش را می‌دهد.
+
+### اگر رم واقعاً کم است
+
+- سرویس‌های غیرضروری را ببندید: `docker compose stop phpmyadmin` روی پروژه‌های دیگر
+- مصرف را ببینید: `docker stats --no-stream`
+- دو نمونهٔ MySQL روی یک سرور دو گیگی سنگین است — می‌توانید دیتابیس پنل را
+  به همان MySQL موجود وصل کنید (`DB_HOST` را در `.env` عوض کنید و سرویس
+  `mysql` پنل را متوقف کنید)
+
+---
+
 ## کارایی
 
 پیش‌فرض‌ها برای چند صد مشتری کافی است. اگر بار بالا رفت:
