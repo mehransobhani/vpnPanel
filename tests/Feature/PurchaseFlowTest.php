@@ -28,7 +28,7 @@ class PurchaseFlowTest extends TestCase
         Queue::fake();
 
         $server = Server::create([
-            'name' => 'Node', 'address' => 'node.example.com', 'sync_driver' => 'manual',
+            'name' => 'Node', 'address' => 'node.example.com',
         ]);
         $server->inbounds()->create([
             'tag' => 'in', 'protocol' => 'vless', 'port' => 443,
@@ -39,7 +39,6 @@ class PurchaseFlowTest extends TestCase
             'name' => 'Monthly', 'slug' => 'monthly', 'duration_days' => 30,
             'traffic_gb' => 50, 'device_limit' => 2, 'price' => 100000,
         ]);
-        $this->plan->servers()->attach($server);
 
         $this->customer = User::create(['name' => 'C', 'email' => 'c@t.local', 'password' => 'secret123']);
         $this->admin = User::create([

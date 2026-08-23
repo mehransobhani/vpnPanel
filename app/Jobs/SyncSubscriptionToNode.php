@@ -59,12 +59,6 @@ class SyncSubscriptionToNode implements ShouldQueue
             return;
         }
 
-        if ($server->sync_driver === 'manual') {
-            $this->markPivot($subscription, $server, 'pending', 'سرور در حالت دستی است.');
-
-            return;
-        }
-
         // سرویس غیرفعال/منقضی نباید روی نود بماند
         $action = ($this->action === 'add' && ! $subscription->isUsable()) ? 'remove' : $this->action;
 
@@ -85,7 +79,7 @@ class SyncSubscriptionToNode implements ShouldQueue
             $server->forceFill(['last_error' => mb_substr($e->getMessage(), 0, 250)])->saveQuietly();
 
             Log::warning('node sync failed', [
-                'server' => $server->name,
+                'node' => $server->name,
                 'subscription' => $subscription->id,
                 'action' => $action,
                 'error' => $e->getMessage(),

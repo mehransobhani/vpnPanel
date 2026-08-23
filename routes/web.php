@@ -75,10 +75,13 @@ Route::middleware(['auth', 'admin'])
     ->group(function () {
         Route::get('/', Admin\DashboardController::class)->name('dashboard');
 
-        Route::resource('servers', Admin\ServerController::class)->except('show');
-        Route::post('servers/{server}/test', [Admin\ServerController::class, 'test'])->name('servers.test');
-        Route::post('servers/{server}/resync', [Admin\ServerController::class, 'resync'])->name('servers.resync');
-        Route::post('servers/{server}/inbounds', [Admin\InboundController::class, 'store'])->name('inbounds.store');
+        // پنل تک‌نودی است: افزودن/حذف سرور وجود ندارد، فقط ویرایش همان یک نود.
+        Route::get('node', [Admin\NodeController::class, 'show'])->name('node');
+        Route::put('node', [Admin\NodeController::class, 'update'])->name('node.update');
+        Route::post('node/test', [Admin\NodeController::class, 'test'])->name('node.test');
+        Route::post('node/resync', [Admin\NodeController::class, 'resync'])->name('node.resync');
+
+        Route::post('inbounds', [Admin\InboundController::class, 'store'])->name('inbounds.store');
         Route::put('inbounds/{inbound}', [Admin\InboundController::class, 'update'])->name('inbounds.update');
         Route::delete('inbounds/{inbound}', [Admin\InboundController::class, 'destroy'])->name('inbounds.destroy');
 

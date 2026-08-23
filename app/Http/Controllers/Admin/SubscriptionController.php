@@ -4,7 +4,6 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Plan;
-use App\Models\Server;
 use App\Models\Subscription;
 use App\Services\SubscriptionService;
 use App\Services\Xray\LinkBuilder;
@@ -48,7 +47,6 @@ class SubscriptionController extends Controller
         return view('admin.subscriptions.show', [
             'subscription' => $subscription,
             'links' => $links,
-            'servers' => Server::orderBy('sort')->get(),
             'plans' => Plan::orderBy('sort')->get(),
         ]);
     }
@@ -112,10 +110,8 @@ class SubscriptionController extends Controller
     public function action(Request $request, Subscription $subscription, SubscriptionService $service)
     {
         $action = $request->validate([
-            'action' => ['required', Rule::in(['reset', 'rotate', 'disable', 'enable', 'renew', 'servers'])],
+            'action' => ['required', Rule::in(['reset', 'rotate', 'disable', 'enable', 'renew'])],
             'plan_id' => ['required_if:action,renew', 'nullable', 'exists:plans,id'],
-            'servers' => ['required_if:action,servers', 'array'],
-            'servers.*' => ['exists:servers,id'],
         ]);
 
         match ($action['action']) {
@@ -124,7 +120,6 @@ class SubscriptionController extends Controller
             'disable' => $service->disable($subscription),
             'enable' => $service->enable($subscription),
             'renew' => $service->renew($subscription, Plan::findOrFail($action['plan_id'])),
-            'servers' => $service->assignServers($subscription, $action['servers']),
         };
 
         return back()->with('status', 'عملیات انجام شد.');

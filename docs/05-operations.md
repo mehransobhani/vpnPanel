@@ -10,7 +10,7 @@
 |---|---|---|
 | `panel:sync-usage` | هر ۵ دقیقه | مصرف را از نودها می‌خواند، اتمام‌حجم‌ها را قطع می‌کند |
 | `panel:expire` | هر ساعت | سرویس‌های منقضی را غیرفعال و از نودها حذف می‌کند |
-| `panel:heal-nodes` | هر ۱۰ دقیقه | اگر نودی ری‌استارت شده، کاربران را دوباره می‌نویسد |
+| `panel:heal-nodes` | هر ۱۰ دقیقه | اگر Xray ری‌استارت شده، کاربران را دوباره می‌نویسد |
 | پاکسازی لاگ ترافیک | روزانه ۰۳:۳۰ | رکوردهای قدیمی‌تر از ۹۰ روز |
 | `queue:prune-failed` | روزانه | jobهای شکست‌خوردهٔ قدیمی‌تر از ۷ روز |
 
@@ -39,24 +39,22 @@ docker compose exec app php artisan schedule:list
 ## دستورات artisan
 
 ```bash
-# آمار مصرف از همهٔ نودها (یا یک نود)
+# آمار مصرف از نود
 docker compose exec app php artisan panel:sync-usage
-docker compose exec app php artisan panel:sync-usage --server=1
 
 # منقضی کردن سرویس‌های تمام‌شده
 docker compose exec app php artisan panel:expire
 
 # بازنویسی همهٔ کاربران روی نود — بعد از ری‌استارت Xray
-docker compose exec app php artisan panel:sync-node "آلمان ۱"
-docker compose exec app php artisan panel:sync-node        # همهٔ نودها
+docker compose exec app php artisan panel:sync-node
 
-# تست اتصال به نود
-docker compose exec app php artisan panel:test-node "آلمان ۱"
+# تست اینکه Xray بالا است و پنل به آن دسترسی دارد
+docker compose exec app php artisan panel:test-node
 
-# راه‌اندازی نود VPN روی همین سرور
+# راه‌اندازی (یا به‌روزرسانی) نود VPN
 docker compose exec app php artisan panel:setup-local-node --address=1.2.3.4 --port=443
 
-# بررسی و ترمیم نودهایی که کاربرانشان پاک شده
+# ترمیم نود اگر کاربرانش پاک شده باشند
 docker compose exec app php artisan panel:heal-nodes
 
 # ساخت یا ارتقای مدیر
@@ -76,9 +74,9 @@ docker compose restart worker                               # ری‌استار�
 ```
 
 هر job همگام‌سازی تا ۱۵ دقیقه با وقفهٔ فزاینده تلاش می‌کند. اگر شکست بخورد،
-پیام خطا در `سرویس‌ها ← جزئیات ← سرورهای این سرویس` روی همان نود ثبت می‌شود.
+پیام خطا در `مدیریت ← نود VPN` ثبت می‌شود.
 
-> کارهای مربوط به یک نود پشت قفل صف‌بندی می‌شوند تا چند اتصال SSH هم‌زمان به یک سرور باز نشود.
+> کارهای مربوط به نود پشت قفل صف‌بندی می‌شوند تا چند دستور هم‌زمان به Xray نرود.
 
 ---
 
@@ -110,11 +108,11 @@ crontab -e
 0 4 * * * find /backups -name 'panel-*.sql.gz' -mtime +14 -delete
 ```
 
-> فایل `.env` را هم جداگانه نگه دارید. بدون `APP_KEY` رمزهای SSH ذخیره‌شده
-> **قابل بازیابی نیستند**.
+> فایل `.env` را هم جداگانه نگه دارید — بدون `APP_KEY` دادهٔ رمزنگاری‌شده
+> **قابل بازیابی نیست**.
 
-> اگر نود محلی دارید، از `docker/xray/config.json` هم بکاپ بگیرید — کلید خصوصی
-> REALITY آنجاست و با گم شدنش همهٔ کانفیگ‌های فروخته‌شده بی‌اعتبار می‌شوند.
+> از `docker/xray/config.json` هم بکاپ بگیرید — کلید خصوصی REALITY آنجاست و
+> با گم شدنش همهٔ کانفیگ‌های فروخته‌شده بی‌اعتبار می‌شوند.
 
 ---
 
@@ -138,11 +136,12 @@ docker compose exec app tail -f storage/logs/laravel.log
 ```bash
 docker compose exec app php artisan panel:sync-usage
 ```
-اگر «هیچ سرور فعالی…» گفت: سرور غیرفعال است یا روی درایور «دستی».
-اگر «پاسخ نامعتبر از statsquery» گفت: بلوک `policy`/`stats` در `config.json` نود نیست.
+اگر «نودی راه‌اندازی نشده» گفت: `panel:setup-local-node` را اجرا کنید.
+اگر «پاسخ نامعتبر از statsquery» گفت: بلوک `policy`/`stats` در `config.json` نیست.
 
 **کاربر روی نود اضافه نمی‌شود**
-`panel:test-node` بزنید و `tag` پنل را با `tag` نود مقایسه کنید — باید عیناً یکی باشند.
+`panel:test-node` بزنید و `tag` پنل را با `tag` داخل `docker/xray/config.json`
+مقایسه کنید — باید عیناً یکی باشند.
 
 **بعد از ری‌استارت Xray همه قطع شدند**
 طبیعی است؛ کاربران فقط در حافظهٔ Xray هستند. زمان‌بند ظرف ۱۰ دقیقه خودش
@@ -153,7 +152,7 @@ docker compose exec app php artisan panel:heal-nodes
 docker compose exec app php artisan panel:sync-node "نام سرور"
 ```
 
-**نود محلی بالا نمی‌آید**
+**نود بالا نمی‌آید**
 ```bash
 docker compose logs xray --tail 20
 ```

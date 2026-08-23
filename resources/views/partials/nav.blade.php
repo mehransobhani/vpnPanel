@@ -2,7 +2,7 @@
     $isAdminArea = request()->routeIs('admin.*');
     $links = $isAdminArea ? [
         ['admin.dashboard', 'داشبورد'],
-        ['admin.servers.index', 'سرورها'],
+        ['admin.node', 'نود VPN'],
         ['admin.plans.index', 'پلن‌ها'],
         ['admin.subscriptions.index', 'سرویس‌ها'],
         ['admin.orders.index', 'سفارش‌ها'],

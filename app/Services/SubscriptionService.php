@@ -35,9 +35,7 @@ class SubscriptionService
                 'expires_at' => now()->addDays($plan->duration_days),
             ]);
 
-            $subscription->servers()->sync(
-                $this->serversForPlan($plan)->pluck('id')->all()
-            );
+            $subscription->servers()->sync($this->nodeIds());
 
             $order?->update(['subscription_id' => $subscription->id]);
 
@@ -69,9 +67,7 @@ class SubscriptionService
             'download' => $resetTraffic ? 0 : $subscription->download,
         ]);
 
-        $subscription->servers()->syncWithoutDetaching(
-            $this->serversForPlan($plan)->pluck('id')->all()
-        );
+        $subscription->servers()->syncWithoutDetaching($this->nodeIds());
 
         ActivityLog::record('subscription.renewed', $subscription, ['plan' => $plan->slug]);
 
@@ -135,24 +131,6 @@ class SubscriptionService
         $this->dispatchSync($subscription, 'add');
     }
 
-    /**
-     * تخصیص دستی سرورها به یک سرویس.
-     */
-    public function assignServers(Subscription $subscription, array $serverIds): void
-    {
-        $removed = $subscription->servers()->pluck('servers.id')->diff($serverIds);
-
-        foreach ($removed as $serverId) {
-            SyncSubscriptionToNode::dispatch($subscription->id, $serverId, 'remove');
-        }
-
-        $subscription->servers()->sync($serverIds);
-
-        foreach ($serverIds as $serverId) {
-            SyncSubscriptionToNode::dispatch($subscription->id, (int) $serverId, 'add');
-        }
-    }
-
     private function dispatchSync(Subscription $subscription, string $action): void
     {
         foreach ($subscription->servers()->pluck('servers.id') as $serverId) {
@@ -161,17 +139,14 @@ class SubscriptionService
     }
 
     /**
-     * اگر پلن سرور مشخصی نداشته باشد، همهٔ سرورهای فعال و پرنشده را برمی‌گرداند.
+     * شناسهٔ نود پنل. پنل تک‌نودی است، ولی اگر هنوز راه‌اندازی نشده باشد
+     * سرویس بدون نود ساخته می‌شود و لینک اشتراک خالی می‌ماند.
+     *
+     * @return array<int, int>
      */
-    private function serversForPlan(Plan $plan)
+    private function nodeIds(): array
     {
-        $servers = $plan->servers()->active()->get();
-
-        if ($servers->isEmpty()) {
-            $servers = Server::active()->get();
-        }
-
-        return $servers->reject(fn (Server $s) => $s->is_full);
+        return Server::active()->pluck('id')->all();
     }
 
     private function uniqueToken(): string

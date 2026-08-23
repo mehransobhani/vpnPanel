@@ -21,7 +21,7 @@ class SetupLocalNode extends Command
         {--address= : آدرسی که مشتری به آن وصل می‌شود (دامنه یا IP عمومی)}
         {--port=443 : پورت VLESS}
         {--sni=www.microsoft.com : دامنهٔ پوششی REALITY}
-        {--name=سرور اصلی : نام نمایشی سرور در پنل}
+        {--name=سرور اصلی : نام نمایشی نود در پنل}
         {--country= : کد دو حرفی کشور}
         {--force : بازتولید کلیدها حتی اگر قبلاً ساخته شده باشند}';
 
@@ -64,17 +64,18 @@ class SetupLocalNode extends Command
         $this->writeConfig($configPath, $port, $sni, $reality);
         $this->info('✓ کانفیگ نوشته شد: '.self::CONFIG_PATH);
 
-        // ۲) ثبت سرور در پنل
-        $server = Server::updateOrCreate(['name' => $this->option('name')], [
+        // ۲) ثبت نود در پنل — همیشه همان یک ردیف به‌روزرسانی می‌شود.
+        $server = Server::node() ?? new Server;
+        $server->fill([
+            'name' => $this->option('name'),
             'address' => $address,
             'country' => $this->option('country') ? strtolower($this->option('country')) : null,
-            'sync_driver' => 'local',
-            'xray_bin' => '/usr/local/bin/xray',
-            'xray_api' => 'xray:10085',
+            'xray_bin' => config('panel.xray.bin'),
+            'xray_api' => config('panel.xray.api'),
             'xray_config_path' => $configPath,
             'is_active' => true,
-            'note' => 'نود محلی — روی همین سروری که پنل اجرا می‌شود.',
-        ]);
+            'note' => 'نود Xray روی همین سروری که پنل اجرا می‌شود.',
+        ])->save();
 
         // ۳) ثبت اینباند
         Inbound::updateOrCreate(['server_id' => $server->id, 'tag' => self::TAG], [
@@ -92,7 +93,12 @@ class SetupLocalNode extends Command
             'is_active' => true,
         ]);
 
-        $this->info("✓ سرور «{$server->name}» و اینباند «".self::TAG.'» در پنل ثبت شدند.');
+        $this->info("✓ نود «{$server->name}» و اینباند «".self::TAG.'» در پنل ثبت شدند.');
+
+        // سرویس‌های فعالی که هنوز به نود وصل نیستند را وصل کن.
+        \App\Models\Subscription::active()
+            ->whereDoesntHave('servers', fn ($q) => $q->whereKey($server->id))
+            ->each(fn ($sub) => $sub->servers()->syncWithoutDetaching([$server->id]));
 
         // ۴) به‌روزرسانی .env تا پورت با compose هماهنگ بماند
         $this->syncEnv($port);
@@ -103,7 +109,7 @@ class SetupLocalNode extends Command
         $this->line('    <fg=cyan>docker compose --profile vpn up -d xray</>');
         $this->newLine();
         $this->line('  سپس تست کنید:');
-        $this->line('    <fg=cyan>docker compose exec app php artisan panel:test-node "'.$server->name.'"</>');
+        $this->line('    <fg=cyan>docker compose exec app php artisan panel:test-node</>');
         $this->newLine();
 
         if ($port === 443) {
@@ -116,7 +122,7 @@ class SetupLocalNode extends Command
     /** اجرای `xray x25519` و استخراج جفت‌کلید. */
     private function generateKeys(): array
     {
-        $process = new Process(['/usr/local/bin/xray', 'x25519']);
+        $process = new Process([config('panel.xray.bin'), 'x25519']);
         $process->run();
         $out = $process->getOutput();
 

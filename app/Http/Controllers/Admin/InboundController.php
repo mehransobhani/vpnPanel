@@ -10,11 +10,14 @@ use Illuminate\Validation\Rule;
 
 class InboundController extends Controller
 {
-    public function store(Request $request, Server $server)
+    public function store(Request $request)
     {
-        $server->inbounds()->create($this->validated($request, $server));
+        $node = Server::node() ?? abort(404, 'نودی راه‌اندازی نشده است.');
 
-        return back()->with('status', 'اینباند اضافه شد. برای اعمال، سرویس‌ها را resync کنید.');
+        $node->inbounds()->create($this->validated($request, $node));
+
+        return back()->with('status',
+            'اینباند اضافه شد. مطمئن شوید همین tag در config.json نود هم هست، سپس «همگام‌سازی مجدد» بزنید.');
     }
 
     public function update(Request $request, Inbound $inbound)

@@ -9,8 +9,8 @@
 ```
 app/
 ├── Models/
-│   ├── Server.php          نود Xray؛ اطلاعات SSH رمزنگاری‌شده
-│   ├── Inbound.php         یک اینباند روی یک سرور
+│   ├── Server.php          تنها نود Xray (یک ردیف)
+│   ├── Inbound.php         یک اینباند روی نود
 │   ├── Plan.php            پلن فروش
 │   ├── Subscription.php    سرویس مشتری — قلب سیستم
 │   ├── Order.php           سفارش
@@ -24,7 +24,7 @@ app/
 │   └── Xray/
 │       ├── LinkBuilder.php         ⭐ ساخت vless:// vmess:// trojan://
 │       ├── SubscriptionFormatter.php  خروجی base64 / raw / clash
-│       └── NodeClient.php          xray api — محلی یا از راه دور با SSH
+│       └── NodeClient.php          xray api روی سرویس xray همین compose
 │
 ├── Jobs/SyncSubscriptionToNode.php  افزودن/حذف کاربر روی یک نود
 │
@@ -57,11 +57,15 @@ routes/console.php   زمان‌بندی
 ## مدل داده
 
 ```
-User ─┬─< Order >─── Plan >──< Server ──< Inbound
-      └─< Subscription >──< Server        (plan_server)
+User ─┬─< Order >─── Plan
+      └─< Subscription >──< Server ──< Inbound
               │            (server_subscription)
               └──< TrafficLog
 ```
+
+جدول `servers` همیشه **یک ردیف** دارد — تنها نود پنل. `Server::node()` آن را
+برمی‌گرداند. رابطهٔ many-to-many با `subscriptions` نگه داشته شده چون وضعیت
+همگام‌سازی (`state`/`message`) را در pivot ذخیره می‌کند.
 
 ### چهار شناسهٔ هر سرویس
 
@@ -118,18 +122,18 @@ $client->removeUser($server, $subscription); // xray api rmu
 $client->fetchUsage($server);              // xray api statsquery -reset
 ```
 
-بسته به `sync_driver` سرور، دستور را یا **محلی** در کانتینر `app` اجرا می‌کند
-(نود داخل همین compose) یا از طریق **SSH** روی سرور راه دور. باینری Xray در ایمیج
-`app` هست و فقط نقش کلاینت API را دارد. برای SSH از `phpseclib3` استفاده می‌شود و
-اتصال هر سرور در همان درخواست کش می‌شود.
+دستورها در کانتینر `app` اجرا می‌شوند و به `xray:10085` روی شبکهٔ داخلی داکر
+می‌روند. باینری Xray در ایمیج `app` هست و فقط نقش کلاینت API را دارد.
 
-دو نکتهٔ ظریف که با آزمایش روی Xray واقعی به دست آمده‌اند:
+سه نکتهٔ ظریف که با آزمایش روی Xray واقعی به دست آمده‌اند:
 
 - `xray api adu` بدون آرگومان صریح **`stdin:`** ورودی لوله‌شده را نادیده می‌گیرد و
   بی‌صدا `Added 0 user(s)` برمی‌گرداند. `runApi()` هم این آرگومان را می‌دهد و هم
   خروجی «۰ کاربر» را خطا حساب می‌کند.
 - JSON ورودی `adu` حتماً باید **`port`** داشته باشد، چون Xray پیش از افزودن کاربر
   کل اینباند را می‌سازد و بدون پورت با «Listen on AnyIP but no Port(s) set» رد می‌کند.
+- خروجی موفق `rmu` فقط «Removed N user(s) in total.» است و هیچ کلمهٔ `OK` ندارد.
+  تشخیص موفقیت باید بر اساس همین عدد باشد، وگرنه هر حذف موفق خطا حساب می‌شود.
 
 هرگز مستقیم صدا نزنید — از `SyncSubscriptionToNode` استفاده کنید تا خطاها
 در pivot ثبت شوند و تلاش مجدد انجام شود.
@@ -188,6 +192,7 @@ scheduler (هر ۵ دقیقه)
 | ایده | نقطهٔ شروع |
 |---|---|
 | درگاه پرداخت آنلاین | `OrderController::store()` — یک `payment_method` جدید |
+| چند نود در چند کشور | جدول `servers` از قبل many-to-many است؛ کافی است رابط افزودن سرور و یک درایور اجرای راه دور برگردد |
 | ربات تلگرام | فیلد `telegram_id` روی `User` از قبل هست |
 | هشدار انقضا | `Schedule` در `routes/console.php` + Notification |
 | API برای نمایندگان | `routes/api.php` + Sanctum |

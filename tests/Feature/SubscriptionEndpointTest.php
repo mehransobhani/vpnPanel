@@ -20,8 +20,7 @@ class SubscriptionEndpointTest extends TestCase
         Queue::fake(); // بدون تلاش برای اتصال به نود
 
         $server = Server::create([
-            'name' => 'Node', 'address' => 'node.example.com',
-            'country' => 'de', 'sync_driver' => 'manual',
+            'name' => 'Node', 'address' => 'node.example.com', 'country' => 'de',
         ]);
 
         $server->inbounds()->create([
@@ -35,7 +34,6 @@ class SubscriptionEndpointTest extends TestCase
             'name' => 'P', 'slug' => 'p', 'duration_days' => 30,
             'traffic_gb' => $trafficGb, 'device_limit' => 2, 'price' => 1000,
         ]);
-        $plan->servers()->attach($server);
 
         $user = User::create(['name' => 'T', 'email' => 't@t.local', 'password' => 'secret123']);
 

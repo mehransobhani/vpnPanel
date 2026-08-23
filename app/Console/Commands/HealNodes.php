@@ -17,17 +17,13 @@ use Throwable;
  */
 class HealNodes extends Command
 {
-    protected $signature = 'panel:heal-nodes {--server= : فقط یک سرور مشخص}';
+    protected $signature = 'panel:heal-nodes';
 
-    protected $description = 'بازگرداندن کاربران به نودهایی که ری‌استارت شده‌اند';
+    protected $description = 'بازگرداندن کاربران به نود پس از ری‌استارت Xray';
 
     public function handle(NodeClient $client): int
     {
-        $servers = Server::active()
-            ->where('sync_driver', '!=', 'manual')
-            ->when($this->option('server'), fn ($q, $id) => $q->whereKey($id))
-            ->with('inbounds')
-            ->get();
+        $servers = Server::active()->with('inbounds')->get();
 
         $healed = 0;
 

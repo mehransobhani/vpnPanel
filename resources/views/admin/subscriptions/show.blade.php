@@ -68,45 +68,6 @@
                 <button class="px-6 py-2 rounded-lg bg-indigo-600 text-white text-sm hover:bg-indigo-500">ذخیره</button>
             </form>
 
-            {{-- تخصیص سرور --}}
-            <form method="POST" action="{{ route('admin.subscriptions.action', $subscription) }}"
-                  class="bg-white rounded-2xl border border-slate-200 p-5">
-                @csrf
-                <input type="hidden" name="action" value="servers">
-                <h2 class="font-bold mb-1">سرورهای این سرویس</h2>
-                <p class="text-xs text-slate-500 mb-4">با ذخیره، کاربر روی نودهای انتخابی اضافه و از بقیه حذف می‌شود.</p>
-
-                <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-4">
-                    @php $assigned = $subscription->servers->pluck('id')->all(); @endphp
-                    @foreach ($servers as $server)
-                        @php $pivot = $subscription->servers->firstWhere('id', $server->id)?->pivot; @endphp
-                        <label class="flex items-start gap-2 text-sm border border-slate-200 rounded-lg p-2.5">
-                            <input type="checkbox" name="servers[]" value="{{ $server->id }}" class="rounded mt-0.5"
-                                   @checked(in_array($server->id, $assigned))>
-                            <span class="flex-1">
-                                {{ $server->name }}
-                                @if ($pivot)
-                                    <span class="block text-[10px] mt-0.5 {{ match($pivot->state) {
-                                        'synced' => 'text-emerald-600',
-                                        'failed' => 'text-rose-600',
-                                        'removed' => 'text-slate-400',
-                                        default => 'text-amber-600' } }}"
-                                        title="{{ $pivot->message }}">
-                                        {{ match($pivot->state) {
-                                            'synced' => '✓ همگام',
-                                            'failed' => '✗ خطا',
-                                            'removed' => 'حذف شده',
-                                            default => '⏳ در صف' } }}
-                                    </span>
-                                @endif
-                            </span>
-                        </label>
-                    @endforeach
-                </div>
-
-                <button class="px-6 py-2 rounded-lg bg-slate-800 text-white text-sm hover:bg-slate-700">ذخیرهٔ سرورها</button>
-            </form>
-
             {{-- کانفیگ‌ها --}}
             <section class="bg-white rounded-2xl border border-slate-200 p-5">
                 <h2 class="font-bold mb-3">کانفیگ‌های تولیدشده</h2>

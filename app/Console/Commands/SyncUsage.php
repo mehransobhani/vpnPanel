@@ -17,19 +17,16 @@ use Throwable;
  */
 class SyncUsage extends Command
 {
-    protected $signature = 'panel:sync-usage {--server= : فقط یک سرور مشخص}';
+    protected $signature = 'panel:sync-usage';
 
-    protected $description = 'خواندن آمار مصرف از نودهای Xray و به‌روزرسانی سرویس‌ها';
+    protected $description = 'خواندن آمار مصرف از Xray و به‌روزرسانی سرویس‌ها';
 
     public function handle(NodeClient $client, SubscriptionService $service): int
     {
-        $servers = Server::active()
-            ->where('sync_driver', '!=', 'manual')
-            ->when($this->option('server'), fn ($q, $id) => $q->whereKey($id))
-            ->get();
+        $servers = Server::active()->get();
 
         if ($servers->isEmpty()) {
-            $this->warn('هیچ سرور فعالی برای همگام‌سازی وجود ندارد.');
+            $this->warn('نودی راه‌اندازی نشده است. `php artisan panel:setup-local-node` را اجرا کنید.');
 
             return self::SUCCESS;
         }

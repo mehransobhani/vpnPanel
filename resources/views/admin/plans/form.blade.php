@@ -59,21 +59,6 @@
                 <input name="price" type="number" required min="0" class="{{ $field }} ltr" value="{{ old('price', $plan->price ?? 0) }}">
             </div>
 
-            <div>
-                <label class="{{ $label }}">سرورهای این پلن <span class="text-slate-400">(هیچ‌کدام = همهٔ سرورهای فعال)</span></label>
-                <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-48 overflow-y-auto border border-slate-200 rounded-lg p-3">
-                    @forelse ($servers as $server)
-                        <label class="flex items-center gap-2 text-sm">
-                            <input type="checkbox" name="servers[]" value="{{ $server->id }}" class="rounded"
-                                   @checked(in_array($server->id, old('servers', $plan->servers->pluck('id')->all())))>
-                            {{ $server->name }}
-                        </label>
-                    @empty
-                        <p class="text-xs text-slate-400 col-span-full">هنوز سروری ثبت نشده است.</p>
-                    @endforelse
-                </div>
-            </div>
-
             <div class="flex gap-5 text-sm pt-2 border-t border-slate-100">
                 <label class="flex items-center gap-2">
                     <input type="checkbox" name="is_active" value="1" class="rounded" @checked(old('is_active', $plan->is_active ?? true))>

@@ -6,42 +6,28 @@ use App\Models\Inbound;
 use App\Models\Server;
 use App\Models\Subscription;
 use Illuminate\Support\Facades\Log;
-use Symfony\Component\Process\Process;
-use phpseclib3\Crypt\PublicKeyLoader;
-use phpseclib3\Net\SSH2;
 use RuntimeException;
+use Symfony\Component\Process\Process;
 
 /**
- * ارتباط با نودهای Xray از طریق دستور `xray api`.
+ * ارتباط با سرویس Xray از طریق دستور `xray api`.
  *
- * سه حالت پشتیبانی می‌شود (فیلد `sync_driver` روی هر سرور):
+ * پنل تک‌نودی است: Xray در همان compose اجرا می‌شود و آدرس API آن روی
+ * شبکهٔ داخلی داکر در دسترس است (پیش‌فرض `xray:10085`). باینری Xray در
+ * ایمیج `app` فقط نقش کلاینت API را دارد.
  *
- *  - `local`  نود روی همین ماشین است (سرویس xray در همین compose).
- *             دستور مستقیماً در کانتینر app اجرا و به `xray:10085` فرستاده می‌شود.
- *  - `ssh`    نود یک سرور جداست؛ دستور از طریق SSH روی خودش اجرا می‌شود.
- *  - `manual` پنل فقط کانفیگ می‌سازد و به نود دست نمی‌زند.
- *
- * در هر دو حالت خودکار، config.json نود باید بلوک api + stats + policy
- * داشته باشد. نمونهٔ کامل در docs/03-xray-node.md آمده است.
+ * config.json نود باید بلوک api + stats + policy داشته باشد؛ دستور
+ * `panel:setup-local-node` آن را می‌سازد.
  */
 class NodeClient
 {
-    private array $connections = [];
-
     public function __construct(private readonly LinkBuilder $links) {}
 
     /**
-     * افزودن کاربر به تمام اینباندهای فعال یک سرور.
-     *
-     * ورودی `xray api adu` یک قطعهٔ config است که کاربران در
-     * inbounds[].settings.clients قرار می‌گیرند.
+     * افزودن کاربر به تمام اینباندهای فعال نود.
      */
     public function addUser(Server $server, Subscription $subscription): void
     {
-        if ($server->sync_driver === 'manual') {
-            throw new RuntimeException('این سرور روی حالت دستی تنظیم شده و همگام‌سازی خودکار ندارد.');
-        }
-
         foreach ($server->inbounds()->active()->get() as $inbound) {
             $settings = ['clients' => [$this->clientJson($inbound, $subscription)]];
 
@@ -66,53 +52,35 @@ class NodeClient
     }
 
     /**
-     * حذف کاربر از تمام اینباندهای سرور.
-     *
-     * `xray api rmu` با فلگ ‎-tag و ایمیل کاربر کار می‌کند.
+     * حذف کاربر از تمام اینباندهای نود.
      */
     public function removeUser(Server $server, Subscription $subscription): void
     {
-        if ($server->sync_driver === 'manual') {
-            return;
-        }
-
         foreach ($server->inbounds()->get() as $inbound) {
-            $command = sprintf(
+            $out = trim($this->exec($server, sprintf(
                 '%s api rmu --server=%s -tag=%s %s 2>&1',
                 escapeshellarg($server->xray_bin),
                 escapeshellarg($server->xray_api),
                 escapeshellarg($inbound->tag),
                 escapeshellarg($subscription->email_tag),
-            );
+            )));
 
-            $out = trim($this->exec($server, $command));
-
-            // نبودنِ کاربر خطا نیست — یعنی از قبل حذف شده.
-            if ($out !== '' && ! preg_match('/OK|success|not found|not exist/i', $out)) {
-                throw new RuntimeException('xray api rmu: '.mb_substr($out, 0, 300));
-            }
+            $this->assertRemoved($inbound->tag, $out);
         }
     }
 
     /**
-     * خواندن آمار مصرف همهٔ کاربران سرور و صفر کردن شمارنده‌ها.
-     *
-     * خروجی: ['email_tag' => ['up' => int, 'down' => int], ...]
+     * خواندن آمار مصرف همهٔ کاربران و صفر کردن شمارنده‌ها.
      *
      * @return array<string, array{up: int, down: int}>
      */
     public function fetchUsage(Server $server, bool $reset = true): array
     {
-        if ($server->sync_driver === 'manual') {
-            return [];
-        }
-
-        $flags = $reset ? '-reset' : '';
         $raw = $this->exec($server, sprintf(
             '%s api statsquery --server=%s %s -pattern "user>>>" 2>&1',
             escapeshellarg($server->xray_bin),
             escapeshellarg($server->xray_api),
-            $flags,
+            $reset ? '-reset' : '',
         ));
 
         $data = json_decode($raw, true);
@@ -138,7 +106,8 @@ class NodeClient
     }
 
     /**
-     * تست اتصال و برگرداندن نسخهٔ Xray روی نود.
+     * تست اینکه سرویس Xray بالا است و API پاسخ می‌دهد.
+     * نسخهٔ Xray را برمی‌گرداند.
      */
     public function ping(Server $server): string
     {
@@ -157,7 +126,9 @@ class NodeClient
 
         if (json_decode($probe, true) === null) {
             throw new RuntimeException(
-                'API نود پاسخ نداد ('.$server->xray_api.'): '.mb_substr(trim($probe), 0, 200)
+                'سرویس Xray پاسخ نداد ('.$server->xray_api.'). آیا با '
+                .'`docker compose --profile vpn up -d xray` بالا آمده است؟ — '
+                .mb_substr(trim($probe), 0, 160)
             );
         }
 
@@ -188,7 +159,7 @@ class NodeClient
     }
 
     /**
-     * فهرست tag اینباندهای موجود در config.json نود — برای کمک به تنظیم پنل.
+     * فهرست اینباندهای موجود در config.json نود — برای تطبیق با تنظیمات پنل.
      *
      * @return array<int, array{tag: string, protocol: string, port: int|null}>
      */
@@ -198,17 +169,17 @@ class NodeClient
         $config = json_decode($raw, true);
 
         if (! is_array($config)) {
-            throw new RuntimeException('خواندن config.json نود ناموفق بود.');
+            throw new RuntimeException('خواندن config.json نود ناموفق بود: '.$server->xray_config_path);
         }
 
-        return array_map(fn ($in) => [
+        return array_values(array_map(fn ($in) => [
             'tag' => $in['tag'] ?? '',
             'protocol' => $in['protocol'] ?? '',
             'port' => $in['port'] ?? null,
         ], array_filter(
             $config['inbounds'] ?? [],
-            fn ($in) => in_array($in['protocol'] ?? '', ['vless', 'vmess', 'trojan'], true)
-        ));
+            fn ($in) => in_array($in['protocol'] ?? '', Inbound::PROTOCOLS, true)
+        )));
     }
 
     /**
@@ -231,7 +202,32 @@ class NodeClient
     }
 
     /**
-     * اجرای `xray api <cmd>` با ورودی JSON روی نود.
+     * بررسی خروجی `xray api rmu`.
+     *
+     * خروجی موفق «Removed N user(s) in total.» است و هیچ کلمهٔ OK ندارد.
+     * نبودنِ خودِ کاربر خطا نیست، ولی نبودنِ اینباند (tag اشتباه) هست.
+     */
+    private function assertRemoved(string $tag, string $out): void
+    {
+        if (preg_match('/Removed\s+[1-9]\d*\s+user/i', $out)) {
+            return;
+        }
+
+        if (preg_match('/User\s+\S+\s+not found/i', $out)) {
+            return; // از قبل حذف شده بود
+        }
+
+        if (preg_match('/handler not found/i', $out)) {
+            throw new RuntimeException(
+                "اینباند «$tag» روی نود وجود ندارد. tag پنل را با config.json نود یکی کنید."
+            );
+        }
+
+        throw new RuntimeException('xray api rmu: '.mb_substr(trim($out) ?: 'پاسخی دریافت نشد', 0, 300));
+    }
+
+    /**
+     * اجرای `xray api <cmd>` با ورودی JSON.
      *
      * نکتهٔ مهم: بدون آرگومان صریح «stdin:» دستور ورودی لوله‌شده را نادیده
      * می‌گیرد و بی‌صدا «Added 0 user(s)» برمی‌گرداند.
@@ -249,9 +245,10 @@ class NodeClient
 
         $out = trim($this->exec($server, $cmd));
 
-        // «Added 0 user(s)» یعنی Xray ورودی را نپذیرفته است.
-        if (preg_match('/Added 0 user|Removed 0 user/i', $out) || ! preg_match('/result:\s*ok|OK|success/i', $out)) {
-            throw new RuntimeException("xray api $command: ".mb_substr($out ?: 'پاسخی دریافت نشد', 0, 300));
+        // خروجی موفق «Added N user(s) in total.» با N ≥ ۱ است.
+        // «Added 0» یعنی Xray ورودی را نپذیرفته — معمولاً به‌خاطر tag یا port اشتباه.
+        if (! preg_match('/(?:Added|Removed)\s+[1-9]\d*\s+user/i', $out)) {
+            throw new RuntimeException("xray api $command: ".mb_substr(trim($out) ?: 'پاسخی دریافت نشد', 0, 300));
         }
 
         return $out;
@@ -259,61 +256,13 @@ class NodeClient
 
     private function exec(Server $server, string $command): string
     {
-        Log::debug('node.exec', [
-            'server' => $server->name,
-            'driver' => $server->sync_driver,
-            'cmd' => mb_substr($command, 0, 120),
-        ]);
+        Log::debug('node.exec', ['cmd' => mb_substr($command, 0, 120)]);
 
-        return $server->sync_driver === 'local'
-            ? $this->execLocal($command)
-            : $this->execSsh($server, $command);
-    }
-
-    /** نود محلی: دستور در همین کانتینر اجرا می‌شود. */
-    private function execLocal(string $command): string
-    {
         $process = Process::fromShellCommandline($command, base_path());
         $process->setTimeout(30);
         $process->run();
 
         // خروجی خطا هم لازم است؛ خود دستورها با 2>&1 آن را ادغام می‌کنند.
         return $process->getOutput().$process->getErrorOutput();
-    }
-
-    private function execSsh(Server $server, string $command): string
-    {
-        $output = $this->connect($server)->exec($command);
-
-        if ($output === false) {
-            throw new RuntimeException('اجرای دستور روی نود ناموفق بود.');
-        }
-
-        return (string) $output;
-    }
-
-    private function connect(Server $server): SSH2
-    {
-        if (isset($this->connections[$server->id])) {
-            return $this->connections[$server->id];
-        }
-
-        $host = $server->ssh_host ?: $server->address;
-        $ssh = new SSH2($host, $server->ssh_port ?: 22, 15);
-        $ssh->setTimeout(60);
-
-        $credential = $server->ssh_private_key
-            ? PublicKeyLoader::load($server->ssh_private_key, $server->ssh_password ?: false)
-            : $server->ssh_password;
-
-        if (! $credential) {
-            throw new RuntimeException("برای سرور «{$server->name}» رمز یا کلید SSH ثبت نشده است.");
-        }
-
-        if (! $ssh->login($server->ssh_user ?: 'root', $credential)) {
-            throw new RuntimeException("ورود SSH به «{$server->name}» ناموفق بود (کاربر/رمز/کلید را بررسی کنید).");
-        }
-
-        return $this->connections[$server->id] = $ssh;
     }
 }

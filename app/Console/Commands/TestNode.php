@@ -9,17 +9,16 @@ use Throwable;
 
 class TestNode extends Command
 {
-    protected $signature = 'panel:test-node {server : شناسه یا نام سرور}';
+    protected $signature = 'panel:test-node';
 
-    protected $description = 'تست اتصال SSH و API به یک نود Xray';
+    protected $description = 'تست اینکه سرویس Xray بالا است و پنل به آن دسترسی دارد';
 
     public function handle(NodeClient $client): int
     {
-        $needle = $this->argument('server');
-        $server = Server::where('id', $needle)->orWhere('name', $needle)->first();
+        $server = Server::node();
 
         if (! $server) {
-            $this->error('سروری با این شناسه/نام پیدا نشد.');
+            $this->error('نودی راه‌اندازی نشده است. `php artisan panel:setup-local-node` را اجرا کنید.');
 
             return self::FAILURE;
         }

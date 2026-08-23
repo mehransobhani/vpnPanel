@@ -14,11 +14,10 @@ return [
 
     'expiry_warning_days' => (int) env('PANEL_EXPIRY_WARNING_DAYS', 3),
 
-    'sync_driver' => env('PANEL_SYNC_DRIVER', 'ssh'),
-
     'xray' => [
         'bin' => env('PANEL_XRAY_BIN', '/usr/local/bin/xray'),
-        'api' => env('PANEL_XRAY_API', '127.0.0.1:10085'),
+        // سرویس xray در همین compose؛ فقط از داخل شبکهٔ داکر در دسترس است.
+        'api' => env('PANEL_XRAY_API', 'xray:10085'),
     ],
 
     // اطلاعات پرداخت کارت‌به‌کارت که در صفحهٔ پرداخت نمایش داده می‌شود

@@ -1,15 +1,14 @@
 @php
     $new = $inbound === null;
-    $id = $new ? 'new' : $inbound->id;
     $field = 'w-full rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm ltr focus:ring-2 focus:ring-indigo-500 outline-none';
     $label = 'block text-[11px] text-slate-600 mb-1';
-    $v = fn ($key, $default = null) => old("$key", $new ? $default : ($inbound->$key ?? $default));
+    $v = fn ($key, $default = null) => old($key, $new ? $default : ($inbound->$key ?? $default));
 @endphp
 
-<details class="bg-white rounded-2xl border border-slate-200 overflow-hidden" @if($new) {{-- بسته --}} @else open @endif>
+<details class="bg-white rounded-2xl border border-slate-200 overflow-hidden" @unless($new) open @endunless>
     <summary class="px-5 py-3.5 cursor-pointer select-none flex items-center justify-between gap-2 hover:bg-slate-50">
         @if ($new)
-            <span class="text-sm font-medium text-indigo-600">+ افزودن اینباند جدید</span>
+            <span class="text-sm font-medium text-indigo-600">+ افزودن اینباند</span>
         @else
             <span class="flex items-center gap-2 text-sm flex-wrap">
                 <b>{{ $inbound->tag }}</b>
@@ -27,14 +26,14 @@
     </summary>
 
     <form method="POST" class="p-5 pt-2 border-t border-slate-100 space-y-4"
-          action="{{ $new ? route('admin.inbounds.store', $server) : route('admin.inbounds.update', $inbound) }}">
+          action="{{ $new ? route('admin.inbounds.store') : route('admin.inbounds.update', $inbound) }}">
         @csrf
         @unless ($new) @method('PUT') @endunless
 
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div>
-                <label class="{{ $label }}">Tag * <span class="text-slate-400">(دقیقاً مثل config.json نود)</span></label>
-                <input name="tag" required value="{{ $v('tag') }}" class="{{ $field }}" placeholder="inbound-vless">
+                <label class="{{ $label }}">Tag * <span class="text-slate-400">(مثل config.json)</span></label>
+                <input name="tag" required value="{{ $v('tag') }}" class="{{ $field }}" placeholder="vless-reality">
             </div>
             <div>
                 <label class="{{ $label }}">پروتکل *</label>
@@ -46,7 +45,7 @@
             </div>
             <div>
                 <label class="{{ $label }}">پورت *</label>
-                <input name="port" type="number" required min="1" max="65535" value="{{ $v('port') }}" class="{{ $field }}" placeholder="443">
+                <input name="port" type="number" required min="1" max="65535" value="{{ $v('port') }}" class="{{ $field }}">
             </div>
             <div>
                 <label class="{{ $label }}">ترتیب</label>
@@ -89,7 +88,7 @@
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div>
                 <label class="{{ $label }}">Path <span class="text-slate-400">(ws / xhttp)</span></label>
-                <input name="path" value="{{ $v('path') }}" class="{{ $field }}" placeholder="/vless">
+                <input name="path" value="{{ $v('path') }}" class="{{ $field }}" placeholder="/ray">
             </div>
             <div>
                 <label class="{{ $label }}">Host header</label>
@@ -131,11 +130,11 @@
             </div>
             <div>
                 <label class="{{ $label }}">Header type <span class="text-slate-400">(tcp)</span></label>
-                <input name="header_type" value="{{ $v('header_type', 'none') }}" class="{{ $field }}" placeholder="none">
+                <input name="header_type" value="{{ $v('header_type', 'none') }}" class="{{ $field }}">
             </div>
             <div>
                 <label class="{{ $label }}">قالب نام کانفیگ *</label>
-                <input name="remark_template" required value="{{ $v('remark_template', '{brand}-{server}') }}" class="{{ $field }}">
+                <input name="remark_template" required value="{{ $v('remark_template', '{brand}-{country}') }}" class="{{ $field }}">
             </div>
         </div>
 
@@ -157,11 +156,9 @@
                 </label>
             </div>
 
-            <div class="flex gap-2">
-                <button class="px-4 py-1.5 rounded-lg bg-indigo-600 text-white text-sm hover:bg-indigo-500">
-                    {{ $new ? 'افزودن' : 'ذخیره' }}
-                </button>
-            </div>
+            <button class="px-4 py-1.5 rounded-lg bg-indigo-600 text-white text-sm hover:bg-indigo-500">
+                {{ $new ? 'افزودن' : 'ذخیره' }}
+            </button>
         </div>
     </form>
 

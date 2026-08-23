@@ -28,7 +28,6 @@
                     <li>⏳ مدت: <b>{{ $plan->duration_days }}</b> روز</li>
                     <li>📊 حجم: <b>{{ $plan->traffic_gb ? $plan->traffic_gb.' GB' : 'نامحدود' }}</b></li>
                     <li>📱 دستگاه هم‌زمان: <b>{{ $plan->device_limit }}</b></li>
-                    <li>🌍 لوکیشن: <b>{{ $plan->servers->isEmpty() ? 'همهٔ سرورها' : $plan->servers->pluck('name')->implode('، ') }}</b></li>
                 </ul>
 
                 <div class="text-2xl font-bold text-indigo-600 mb-4">{{ \App\Support\Format::money($plan->price) }}</div>

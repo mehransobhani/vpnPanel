@@ -12,20 +12,16 @@ use Illuminate\Console\Command;
  */
 class SyncNode extends Command
 {
-    protected $signature = 'panel:sync-node {server? : شناسه یا نام سرور}';
+    protected $signature = 'panel:sync-node';
 
-    protected $description = 'همگام‌سازی کامل کاربران یک نود (یا همهٔ نودها)';
+    protected $description = 'بازنویسی همهٔ کاربران فعال روی نود Xray';
 
     public function handle(): int
     {
-        $servers = Server::active()
-            ->when($this->argument('server'), function ($q, $needle) {
-                $q->where('id', $needle)->orWhere('name', $needle);
-            })
-            ->get();
+        $servers = Server::active()->get();
 
         if ($servers->isEmpty()) {
-            $this->error('سروری پیدا نشد.');
+            $this->error('نودی راه‌اندازی نشده است. `php artisan panel:setup-local-node` را اجرا کنید.');
 
             return self::FAILURE;
         }

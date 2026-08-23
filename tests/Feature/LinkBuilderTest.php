@@ -33,8 +33,7 @@ class LinkBuilderTest extends TestCase
     private function inbound(array $attributes): Inbound
     {
         $server = Server::create([
-            'name' => 'Node', 'address' => 'node.example.com',
-            'country' => 'de', 'sync_driver' => 'manual',
+            'name' => 'Node', 'address' => 'node.example.com', 'country' => 'de',
         ]);
 
         return $server->inbounds()->create($attributes + [

@@ -52,8 +52,8 @@ docker compose up -d --build
 4. `php artisan migrate --force` را اجرا می‌کند
 5. کش کانفیگ و روت را می‌سازد
 
-> ⚠️ `php artisan key:generate` را **بعد از اولین اجرا دستی نزنید**. کلید موجود
-> عوض می‌شود و رمزهای SSH ذخیره‌شدهٔ سرورها غیرقابل خواندن می‌شوند.
+> ⚠️ `php artisan key:generate` را **بعد از اولین اجرا دستی نزنید**. با عوض شدن
+> کلید، سشن‌های فعال و دادهٔ رمزنگاری‌شده از کار می‌افتند.
 
 وضعیت را ببینید:
 
@@ -85,26 +85,25 @@ docker compose exec app php artisan db:seed --force
 
 ## گام ۴ — نود VPN
 
-پنل به‌تنهایی فقط کانفیگ می‌سازد؛ ترافیک باید از یک سرویس Xray رد شود.
-
-**اگر همین سرور خارج از کشور است** و می‌خواهید خودش VPN هم باشد:
+پنل به‌تنهایی فقط کانفیگ می‌سازد؛ ترافیک باید از سرویس Xray رد شود.
+Xray روی **همین سرور** اجرا می‌شود:
 
 ```bash
 docker compose exec app php artisan panel:setup-local-node \
     --address=IP_عمومی_سرور --port=443
 docker compose --profile vpn up -d xray
-docker compose exec app php artisan panel:test-node "سرور اصلی"
+docker compose exec app php artisan panel:test-node
 ```
 
-از این به بعد `docker compose --profile vpn up -d` کل استک را با نود بالا می‌آورد.
-برای اینکه پروفایل همیشه فعال باشد، به `.env` اضافه کنید:
+برای اینکه از این پس `docker compose up -d` خودش Xray را هم بالا بیاورد،
+به `.env` اضافه کنید:
 
 ```dotenv
 COMPOSE_PROFILES=vpn
 ```
 
-**اگر پنل داخل ایران است**، نود باید سرور جدایی خارج از کشور باشد —
-راهنمای کامل: [۰۳ — آماده‌سازی سرور Xray](03-xray-node.md).
+> ⚠️ نود باید به اینترنت آزاد دسترسی داشته باشد؛ یعنی این پنل باید روی سروری
+> **خارج از کشور** نصب شود. جزئیات: [۰۳ — نود VPN](03-xray-node.md).
 
 ---
 
@@ -116,11 +115,10 @@ COMPOSE_PROFILES=vpn
 docker compose exec app php artisan db:seed --class=DemoSeeder --force
 ```
 
-یک سرور نمونه با سه اینباند (VLESS+REALITY، VMess+WS، Trojan+gRPC)،
-یک مشتری (`customer@panel.local` / `password`) و یک سرویس فعال می‌سازد و
+یک مشتری (`customer@panel.local` / `password`) با یک سرویس فعال می‌سازد و
 لینک‌های تولیدشده را در ترمینال چاپ می‌کند.
 
-> این سرور با درایور **دستی** ساخته می‌شود، پس پنل تلاشی برای اتصال SSH نمی‌کند.
+> اگر هنوز نود راه‌اندازی نشده باشد، هشدار می‌دهد و لینک خالی خواهد بود.
 
 ---
 
