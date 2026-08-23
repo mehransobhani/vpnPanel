@@ -38,7 +38,7 @@ docker compose exec app php artisan db:seed --force
 
 ```bash
 docker compose exec app php artisan panel:setup-local-node \
-    --address=IP_عمومی_سرور --port=443
+    --address=203.0.113.10 --port=443   # IP واقعی سرور خودتان
 docker compose --profile vpn up -d xray
 ```
 

@@ -18,7 +18,7 @@
             <p class="text-sm text-slate-500 mb-4">این دستور را در ترمینال سرور اجرا کنید:</p>
             <code class="block bg-slate-900 text-emerald-300 rounded-xl p-4 text-xs ltr text-left overflow-x-auto">
 docker compose exec app php artisan panel:setup-local-node \<br>
-&nbsp;&nbsp;&nbsp;&nbsp;--address=IP_عمومی_سرور --port=443<br><br>
+&nbsp;&nbsp;&nbsp;&nbsp;--address=203.0.113.10 --port=443<br><br><span class="text-slate-400"># به‌جای 203.0.113.10 آی‌پی واقعی سرور را بگذارید،<br># یا --address را حذف کنید تا خودش پیدا کند</span><br><br>
 docker compose --profile vpn up -d xray
             </code>
             <p class="text-xs text-slate-400 mt-4">

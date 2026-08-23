@@ -14,7 +14,7 @@
 
 ```bash
 docker compose exec app php artisan panel:setup-local-node \
-    --address=IP_عمومی_سرور \
+    --address=203.0.113.10 \
     --port=443 \
     --sni=www.microsoft.com \
     --name="سرور اصلی" \
@@ -30,6 +30,10 @@ docker compose exec app php artisan panel:setup-local-node \
 4. نود و اینباند `vless-reality` را در پنل ثبت می‌کند
 5. `XRAY_PORT` را در `.env` تنظیم می‌کند
 6. سرویس‌های فعالی که هنوز به نود وصل نبودند را وصل می‌کند
+
+> **`--address` را با IP واقعی سرورتان پر کنید.** اگر متن نمونه را عیناً کپی کنید،
+> دستور با خطا متوقف می‌شود. ساده‌تر: `--address` را اصلاً ندهید تا خودش IP عمومی
+> سرور را پیدا کند.
 
 سپس Xray را بالا بیاورید:
 
@@ -63,7 +67,7 @@ COMPOSE_PROFILES=vpn
 
 | گزینه | پیش‌فرض | توضیح |
 |---|---|---|
-| `--address` | حدس از `APP_URL` یا IP عمومی | آدرسی که در کانفیگ مشتری می‌نشیند |
+| `--address` | حدس خودکار IP عمومی | آدرسی که در کانفیگ مشتری می‌نشیند — **IP یا دامنهٔ واقعی**، نه متن نمونه |
 | `--port` | `443` | پورت VLESS |
 | `--sni` | `www.microsoft.com` | دامنهٔ پوششی REALITY |
 | `--name` | `سرور اصلی` | نام نمایشی در پنل |

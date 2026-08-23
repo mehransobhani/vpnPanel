@@ -219,7 +219,7 @@ class NodeClient
 
         if (preg_match('/handler not found/i', $out)) {
             throw new RuntimeException(
-                "اینباند «$tag» روی نود وجود ندارد. tag پنل را با config.json نود یکی کنید."
+                "اینباند «{$tag}» روی نود وجود ندارد. tag پنل را با config.json نود یکی کنید."
             );
         }
 

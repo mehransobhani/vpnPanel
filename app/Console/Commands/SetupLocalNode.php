@@ -41,16 +41,40 @@ class SetupLocalNode extends Command
             return self::FAILURE;
         }
 
+        if ($problem = $this->addressProblem($address)) {
+            $this->error($problem);
+            $this->newLine();
+            $this->line('  نمونهٔ درست:');
+            $this->line('    <fg=cyan>--address=203.0.113.10</>      (IP سرور)');
+            $this->line('    <fg=cyan>--address=vpn.example.com</>   (دامنه)');
+            $this->newLine();
+            $this->line('  یا اصلاً ندهید تا خودش IP عمومی سرور را پیدا کند:');
+            $this->line('    <fg=cyan>php artisan panel:setup-local-node --port=443</>');
+
+            return self::FAILURE;
+        }
+
         $port = (int) $this->option('port');
         $sni = $this->option('sni');
         $configPath = base_path(self::CONFIG_PATH);
 
         $existing = file_exists($configPath) ? json_decode(file_get_contents($configPath), true) : null;
         $reality = $this->realitySettings($existing);
+        $node = Server::node();
 
-        if ($existing && ! $this->option('force')) {
+        // کلیدها فقط وقتی حفظ می‌شوند که این نود قبلاً در همین پنل ثبت شده باشد.
+        // اگر config.json هست ولی رکوردی در دیتابیس نیست، یعنی فایل از جای
+        // دیگری کپی شده و کلید خصوصی‌اش دست ما نیست — باید بازتولید شود.
+        $keysUsable = $existing && $node && $reality['privateKey'] !== '' && $reality['publicKey'] !== '';
+
+        if ($keysUsable && ! $this->option('force')) {
             $this->warn('کانفیگ موجود پیدا شد — کلیدهای فعلی حفظ می‌شوند (برای بازتولید: --force).');
         } else {
+            if ($existing && ! $node) {
+                $this->warn('کانفیگ Xray پیدا شد ولی نودی در پنل ثبت نیست —');
+                $this->warn('این فایل احتمالاً از جای دیگری کپی شده. کلیدها بازتولید می‌شوند.');
+            }
+
             try {
                 $reality = $this->generateKeys();
             } catch (RuntimeException $e) {
@@ -117,6 +141,28 @@ class SetupLocalNode extends Command
         }
 
         return self::SUCCESS;
+    }
+
+    /**
+     * آدرس باید IP یا دامنهٔ واقعی باشد.
+     * جلوگیری از خطای رایج: کپی کردن عینِ متن راهنما به‌جای مقدار واقعی.
+     */
+    private function addressProblem(string $address): ?string
+    {
+        if (preg_match('/[^\x20-\x7E]/', $address)) {
+            return "آدرس «{$address}» حروف غیرانگلیسی دارد — احتمالاً متن راهنما را عیناً کپی کرده‌اید.";
+        }
+
+        if (filter_var($address, FILTER_VALIDATE_IP)) {
+            return null;
+        }
+
+        // دامنه: برچسب‌های حرف/عدد/خط‌تیره که با نقطه جدا شده‌اند
+        if (preg_match('/^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/i', $address)) {
+            return null;
+        }
+
+        return "آدرس «{$address}» نه IP معتبر است نه دامنهٔ معتبر.";
     }
 
     /** اجرای `xray x25519` و استخراج جفت‌کلید. */
