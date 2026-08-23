@@ -27,22 +27,29 @@
 ## شروع سریع
 
 ```bash
-cp .env.example .env
-docker compose up -d --build
-docker compose exec app php artisan db:seed --force
+bash install.sh
 ```
 
-پنل روی <http://localhost:8080> بالا می‌آید.
+همین. اسکریپت پورت‌های آزاد را پیدا می‌کند (تا با سرویس‌های دیگرِ همان سرور
+تداخل نکند)، سرویس‌ها را بالا می‌آورد، نود VPN را می‌سازد و در پایان
+آدرس پنل و دستور فایروال را چاپ می‌کند.
 
-سپس نود VPN را روی همین سرور راه بیندازید:
+اگر سرویس دیگری روی ۸۰/۴۴۳ دارید (nginx، Caddy و…)، خودش تشخیص می‌دهد و
+پنل را فقط روی لوکال‌هاست باز می‌کند تا پشت همان پروکسی ببریدش.
+
+### نصب دستی
+
+اگر ترجیح می‌دهید مرحله‌به‌مرحله جلو بروید:
+**[۰۱ — نصب و راه‌اندازی](docs/01-installation.md)**
+
+### عیب‌یابی
 
 ```bash
-docker compose exec app php artisan panel:setup-local-node \
-    --address=203.0.113.10 --port=443   # IP واقعی سرور خودتان
-docker compose --profile vpn up -d xray
+docker compose exec app php artisan panel:doctor
 ```
 
-جزئیات: **[۰۳ — نود VPN](docs/03-xray-node.md)**
+آدرس نود، سلامت Xray، تطابق اینباندها با `config.json`، باز بودن پورت،
+در دسترس بودن دامنهٔ پوششی و تعداد کاربران روی نود را یک‌جا بررسی می‌کند.
 
 | نقش | ایمیل | رمز |
 |---|---|---|
