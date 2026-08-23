@@ -28,8 +28,6 @@
 
 ```bash
 cp .env.example .env
-sed -i "s/^UID=.*/UID=$(id -u)/; s/^GID=.*/GID=$(id -g)/" .env
-
 docker compose up -d --build
 docker compose exec app php artisan db:seed --force
 ```

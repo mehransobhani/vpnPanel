@@ -29,10 +29,10 @@ COPY docker/php/supervisord.conf /etc/supervisor/supervisord.conf
 COPY docker/php/entrypoint.sh /usr/local/bin/entrypoint
 RUN chmod +x /usr/local/bin/entrypoint
 
-# php-fpm باید به‌عنوان کاربر هاست اجرا شود (compose آن را با user: تنظیم می‌کند)
-RUN sed -i 's/^user = www-data/;user = www-data/; s/^group = www-data/;group = www-data/' \
-        /usr/local/etc/php-fpm.d/www.conf \
-    && sed -i 's|^listen = .*|listen = 9000|' /usr/local/etc/php-fpm.d/www.conf
+# php-fpm به‌عنوان root شروع می‌شود و worker‌ها را با www-data اجرا می‌کند —
+# روش استاندارد. افت دادن دسترسیِ خودِ master باعث می‌شود نتواند
+# /proc/self/fd/2 (لاگ داکر) را باز کند.
+RUN sed -i 's|^listen = .*|listen = 9000|' /usr/local/etc/php-fpm.d/www.conf
 
 ENV HOME=/tmp \
     XDG_CONFIG_HOME=/tmp \
