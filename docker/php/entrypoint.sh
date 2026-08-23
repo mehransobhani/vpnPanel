@@ -1,21 +1,73 @@
 #!/bin/sh
-set -e
+# با set -e کار نمی‌کنیم: می‌خواهیم هر خطا با پیام روشن گزارش شود،
+# نه اینکه کانتینر بی‌صدا بمیرد و فقط «unhealthy» ببینید.
+set -u
 
 cd /var/www/html
 
-mkdir -p storage/framework/{cache/data,sessions,views} storage/logs bootstrap/cache
-chmod -R ug+rw storage bootstrap/cache 2>/dev/null || true
+ME="$(id -u):$(id -g)"
 
-if [ ! -f vendor/autoload.php ]; then
-    echo "[entrypoint] installing composer dependencies..."
-    composer install --no-interaction --prefer-dist --optimize-autoloader
+fail() {
+    echo ""
+    echo "  ✗ [entrypoint] $1"
+    echo ""
+    exit 1
+}
+
+warn() {
+    echo "  ! [entrypoint] $1"
+}
+
+step() {
+    label="$1"
+    shift
+    if ! "$@"; then
+        warn "«$label» با خطا مواجه شد — پنل ممکن است درست کار نکند."
+        return 1
+    fi
+}
+
+# ── پیش‌نیازها ────────────────────────────────────────────────────────────
+[ -f .env ] || fail "فایل .env وجود ندارد.
+    اجرا کنید:  cp .env.example .env"
+
+if ! mkdir -p storage/framework/cache/data storage/framework/sessions \
+              storage/framework/views storage/logs bootstrap/cache 2>/dev/null; then
+    fail "کاربر کانتینر ($ME) اجازهٔ نوشتن در storage/ را ندارد.
+    UID/GID را برابر مالک فایل‌های پروژه بگذارید و کانتینر را بازبسازید:
+
+      sed -i \"s/^UID=.*/UID=\$(id -u)/; s/^GID=.*/GID=\$(id -g)/\" .env
+      docker compose up -d --force-recreate"
 fi
 
-# کلید باید دقیقاً یک‌بار و پیش از کش کردن کانفیگ ساخته شود
-if [ -f .env ] && ! grep -qE '^APP_KEY=base64:[A-Za-z0-9+/]{40,}=*$' .env; then
-    echo "[entrypoint] generating application key..."
-    php artisan config:clear >/dev/null 2>&1 || true
-    php artisan key:generate --force
+if ! touch storage/logs/.write-test 2>/dev/null; then
+    fail "storage/logs با کاربر $ME قابل نوشتن نیست.
+    روی هاست اجرا کنید:
+
+      sudo chown -R \$(id -u):\$(id -g) storage bootstrap/cache
+      sed -i \"s/^UID=.*/UID=\$(id -u)/; s/^GID=.*/GID=\$(id -g)/\" .env
+      docker compose up -d --force-recreate"
+fi
+rm -f storage/logs/.write-test
+
+chmod -R ug+rw storage bootstrap/cache 2>/dev/null || true
+
+# ── وابستگی‌ها ────────────────────────────────────────────────────────────
+if [ ! -f vendor/autoload.php ]; then
+    echo "[entrypoint] vendor/ پیدا نشد — نصب وابستگی‌ها (چند دقیقه طول می‌کشد)..."
+    composer install --no-interaction --prefer-dist --optimize-autoloader \
+        || fail "composer install ناموفق بود. اتصال اینترنت سرور را بررسی کنید."
+fi
+
+# ── کلید برنامه ───────────────────────────────────────────────────────────
+# باید دقیقاً یک‌بار و پیش از کش کردن کانفیگ ساخته شود.
+if ! grep -qE '^APP_KEY=base64:[A-Za-z0-9+/]{40,}=*$' .env; then
+    [ -w .env ] || fail "APP_KEY خالی است ولی .env قابل نوشتن نیست (کاربر $ME).
+    روی هاست:  sudo chown \$(id -u):\$(id -g) .env"
+
+    echo "[entrypoint] ساخت کلید برنامه..."
+    php artisan config:clear >/dev/null 2>&1
+    php artisan key:generate --force || fail "ساخت APP_KEY ناموفق بود."
 fi
 
 # مقادیر .env به محیط کانتینر تزریق نمی‌شوند (تا متغیر خالی بر فایل اولویت نگیرد)،
@@ -24,13 +76,13 @@ env_get() {
     sed -n "s/^$1=//p" .env | tail -1 | sed -e 's/^"\(.*\)"$/\1/' -e "s/^'\(.*\)'\$/\1/"
 }
 
-if [ "$1" = "php-fpm" ]; then
-    echo "[entrypoint] waiting for database..."
-
+if [ "${1:-}" = "php-fpm" ]; then
     db_host="$(env_get DB_HOST)"
     db_port="$(env_get DB_PORT)"
     db_user="$(env_get DB_USERNAME)"
     db_pass="$(env_get DB_PASSWORD)"
+
+    echo "[entrypoint] انتظار برای دیتابیس ${db_host}:${db_port:-3306} ..."
 
     connected=0
     for i in $(seq 1 60); do
@@ -45,22 +97,26 @@ if [ "$1" = "php-fpm" ]; then
             } catch (Throwable $e) { exit(1); }
         ' "$db_host" "$db_port" "$db_user" "$db_pass" 2>/dev/null; then
             connected=1
-            echo "[entrypoint] database ready after ${i}x2s"
+            echo "[entrypoint] دیتابیس آماده شد (${i}x2s)"
             break
         fi
         sleep 2
     done
 
-    if [ "$connected" != "1" ]; then
-        echo "[entrypoint] WARNING: could not reach database at ${db_host}:${db_port:-3306} — continuing anyway"
+    if [ "$connected" = "1" ]; then
+        step "migrate" php artisan migrate --force --graceful
+    else
+        warn "دیتابیس ${db_host}:${db_port:-3306} در دسترس نیست.
+    مقادیر DB_* در .env را با سرویس mysql در compose.yaml مقایسه کنید.
+    پنل بالا می‌آید ولی تا رفع مشکل کار نخواهد کرد."
     fi
 
-    php artisan migrate --force --graceful
-    php artisan storage:link 2>/dev/null || true
-    php artisan config:clear
-    php artisan config:cache
-    php artisan route:cache
-    php artisan event:cache
+    php artisan storage:link >/dev/null 2>&1 || true
+    step "config:cache" sh -c 'php artisan config:clear >/dev/null && php artisan config:cache >/dev/null'
+    step "route:cache" php artisan route:cache >/dev/null
+    step "event:cache" php artisan event:cache >/dev/null
+
+    echo "[entrypoint] آمادهٔ سرویس‌دهی."
 fi
 
 exec "$@"
