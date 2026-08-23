@@ -135,27 +135,45 @@ head_ "۳/۶ ساخت و اجرای سرویس‌ها"
 
 # تور ایمنی: اگر تشخیص پورت به هر دلیلی اشتباه کرده باشد، داکر خطای
 # «port is already allocated» می‌دهد؛ پورت بعدی را امتحان می‌کنیم.
+LOG=/tmp/vpn-install.log
+
 bring_up() {
     local candidates=("$@") p out
     for p in "${candidates[@]}"; do
         env_set APP_PORT "$p"
+
         if out="$(compose up -d --build 2>&1)"; then
-            printf '%s\n' "$out" | grep -vE "^ *$" | tail -3
+            printf '%s\n' "$out" >> "$LOG"
             app_port="$p"
             return 0
         fi
-        if printf '%s' "$out" | grep -q "already allocated\|address already in use"; then
-            warn "پورت $p اشغال بود — پورت بعدی امتحان می‌شود."
-            compose down --remove-orphans >/dev/null 2>&1 || true
-            continue
-        fi
-        printf '%s\n' "$out" | tail -15
+
+        printf '%s\n' "$out" >> "$LOG"
+
+        # تطبیق با الگوی bash — نه با لوله، تا SIGPIPE نتیجه را خراب نکند.
+        case "$out" in
+            *"already allocated"*|*"address already in use"*|*"Address already in use"*)
+                warn "پورت $p اشغال بود — پورت بعدی امتحان می‌شود."
+                compose down --remove-orphans >/dev/null 2>&1 || true
+                continue
+                ;;
+        esac
+
+        echo
+        bad "بالا آوردن سرویس‌ها ناموفق بود. خطای داکر:"
+        echo "${c_dim}────────────────────────────────────────${c_0}"
+        printf '%s\n' "$out" | tail -25
+        echo "${c_dim}────────────────────────────────────────${c_0}"
+        echo "  لاگ کامل: $LOG"
         return 1
     done
+
+    bad "هیچ‌کدام از پورت‌های پیشنهادی آزاد نبود."
     return 1
 }
 
-bring_up "$app_port" 8090 8100 8110 8120 9080 || die "بالا آوردن سرویس‌ها ناموفق بود."
+: > "$LOG"
+bring_up "$app_port" 8090 8100 8110 8120 9080 || exit 1
 ok "پنل روی ${app_bind}:${app_port}"
 printf "  در انتظار آماده شدن اپ"
 for _ in $(seq 1 60); do
