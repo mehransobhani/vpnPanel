@@ -28,17 +28,43 @@ die()  { bad "$*"; exit 1; }
 compose() { docker compose "$@"; }
 
 # ── پورت اشغال است؟ ──────────────────────────────────────────────────────
+# بدون لوله نوشته شده: با `set -o pipefail`، خروج زودهنگام `grep -q` باعث
+# SIGPIPE روی تولیدکننده و کد خروجی ۱۴۱ می‌شود — یعنی «پیدا نشد» گزارش
+# می‌کند حتی وقتی پورت واقعاً اشغال است.
 port_busy() {
-    local p="$1"
+    local p="$1" out="" line field
+
     if command -v ss >/dev/null 2>&1; then
-        ss -Hltn "sport = :$p" 2>/dev/null | grep -q . && return 0
-        ss -Hlun "sport = :$p" 2>/dev/null | grep -q . && return 0
-        return 1
+        out="$(ss -ltun 2>/dev/null || true)"
+    elif command -v netstat >/dev/null 2>&1; then
+        out="$(netstat -ltun 2>/dev/null || true)"
     fi
-    if command -v netstat >/dev/null 2>&1; then
-        netstat -ltun 2>/dev/null | awk '{print $4}' | grep -qE "[:.]$p\$" && return 0
-        return 1
+
+    if [ -n "$out" ]; then
+        while IFS= read -r line; do
+            for field in $line; do
+                case "$field" in
+                    *:"$p"|*."$p") return 0 ;;
+                esac
+            done
+        done <<< "$out"
     fi
+
+    # تست مستقل از ابزار سیستمی: اگر بشود وصل شد، یعنی کسی گوش می‌دهد.
+    if (exec 3<>"/dev/tcp/127.0.0.1/$p") 2>/dev/null; then
+        return 0
+    fi
+
+    return 1
+}
+
+# پورتی که همین حالا کانتینرهای خودمان منتشر کرده‌اند «تداخل» نیست
+is_ours() {
+    local ports
+    ports="$(compose ps --format '{{.Ports}}' 2>/dev/null || true)"
+    case "$ports" in
+        *":$1->"*) return 0 ;;
+    esac
     return 1
 }
 
@@ -48,16 +74,11 @@ pick_port() {
     if [ -n "$current" ] && { ! port_busy "$current" || is_ours "$current"; }; then
         echo "$current"; return
     fi
+    local p
     for p in "$@"; do
         if ! port_busy "$p"; then echo "$p"; return; fi
     done
     echo ""
-}
-
-# پورتی که همین حالا کانتینرهای خودمان منتشر کرده‌اند «تداخل» نیست
-is_ours() {
-    compose ps --format '{{.Ports}}' 2>/dev/null | grep -q ":$1->" && return 0
-    return 1
 }
 
 env_get() { sed -n "s/^$1=//p" .env 2>/dev/null | tail -1; }
@@ -111,7 +132,31 @@ ok "Xray: 0.0.0.0:${xray_port}"
 
 # ── ۳) بالا آوردن سرویس‌ها ───────────────────────────────────────────────
 head_ "۳/۶ ساخت و اجرای سرویس‌ها"
-compose up -d --build
+
+# تور ایمنی: اگر تشخیص پورت به هر دلیلی اشتباه کرده باشد، داکر خطای
+# «port is already allocated» می‌دهد؛ پورت بعدی را امتحان می‌کنیم.
+bring_up() {
+    local candidates=("$@") p out
+    for p in "${candidates[@]}"; do
+        env_set APP_PORT "$p"
+        if out="$(compose up -d --build 2>&1)"; then
+            printf '%s\n' "$out" | grep -vE "^ *$" | tail -3
+            app_port="$p"
+            return 0
+        fi
+        if printf '%s' "$out" | grep -q "already allocated\|address already in use"; then
+            warn "پورت $p اشغال بود — پورت بعدی امتحان می‌شود."
+            compose down --remove-orphans >/dev/null 2>&1 || true
+            continue
+        fi
+        printf '%s\n' "$out" | tail -15
+        return 1
+    done
+    return 1
+}
+
+bring_up "$app_port" 8090 8100 8110 8120 9080 || die "بالا آوردن سرویس‌ها ناموفق بود."
+ok "پنل روی ${app_bind}:${app_port}"
 printf "  در انتظار آماده شدن اپ"
 for _ in $(seq 1 60); do
     if [ "$(docker inspect "$(compose ps -q app)" --format '{{.State.Health.Status}}' 2>/dev/null)" = "healthy" ]; then
