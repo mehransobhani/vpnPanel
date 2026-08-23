@@ -5,7 +5,6 @@ services:
       dockerfile: docker/php/Dockerfile
     image: vpnpanel-app
     restart: unless-stopped
-    user: "${UID:-1000}:${GID:-1000}"
     volumes:
       - .:/var/www/html
     depends_on:
@@ -37,7 +36,6 @@ services:
   worker:
     image: vpnpanel-app
     restart: unless-stopped
-    user: "${UID:-1000}:${GID:-1000}"
     command: ["supervisord", "-c", "/etc/supervisor/supervisord.conf"]
     volumes:
       - .:/var/www/html

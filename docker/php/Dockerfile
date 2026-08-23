@@ -2,7 +2,7 @@ FROM php:8.4-fpm-alpine
 
 # کتابخانه‌های زمان اجرا
 RUN apk add --no-cache \
-        bash git curl zip unzip supervisor openssh-client \
+        bash git curl zip unzip supervisor su-exec \
         icu-libs oniguruma libzip libpng freetype libjpeg-turbo
 
 # افزونه‌های PHP — ابزارهای کامپایل بعد از build حذف می‌شوند
