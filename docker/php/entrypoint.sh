@@ -27,25 +27,43 @@ step() {
     fi
 }
 
+# ── تنظیم خودکار کاربر ────────────────────────────────────────────────────
+# کانتینر به‌عنوان root شروع می‌شود، مالک واقعی پوشهٔ پروژه را پیدا می‌کند،
+# دسترسی‌ها را اصلاح می‌کند و بعد خودش را با همان کاربر دوباره اجرا می‌کند.
+# با این کار روی هر هاستی (root یا کاربر عادی) بدون تنظیم دستی کار می‌کند.
+if [ "$(id -u)" = "0" ]; then
+    owner_uid="$(stat -c %u . 2>/dev/null || echo 0)"
+    owner_gid="$(stat -c %g . 2>/dev/null || echo 0)"
+
+    # php-fpm اجازه ندارد به‌عنوان root اجرا شود؛ اگر پروژه مال root است
+    # از کاربر www-data استفاده می‌کنیم.
+    if [ "$owner_uid" = "0" ]; then
+        owner_uid=82   # www-data در آلپاین
+        owner_gid=82
+    fi
+
+    mkdir -p storage/framework/cache/data storage/framework/sessions \
+             storage/framework/views storage/logs bootstrap/cache
+
+    chown -R "$owner_uid:$owner_gid" storage bootstrap/cache 2>/dev/null || true
+    [ -f .env ] && chown "$owner_uid:$owner_gid" .env 2>/dev/null || true
+
+    echo "[entrypoint] اجرا با کاربر $owner_uid:$owner_gid"
+
+    exec su-exec "$owner_uid:$owner_gid" "$0" "$@"
+fi
+
 # ── پیش‌نیازها ────────────────────────────────────────────────────────────
 [ -f .env ] || fail "فایل .env وجود ندارد.
     اجرا کنید:  cp .env.example .env"
 
 if ! mkdir -p storage/framework/cache/data storage/framework/sessions \
-              storage/framework/views storage/logs bootstrap/cache 2>/dev/null; then
+              storage/framework/views storage/logs bootstrap/cache 2>/dev/null \
+   || ! touch storage/logs/.write-test 2>/dev/null; then
     fail "کاربر کانتینر ($ME) اجازهٔ نوشتن در storage/ را ندارد.
-    UID/GID را برابر مالک فایل‌های پروژه بگذارید و کانتینر را بازبسازید:
-
-      sed -i \"s/^UID=.*/UID=\$(id -u)/; s/^GID=.*/GID=\$(id -g)/\" .env
-      docker compose up -d --force-recreate"
-fi
-
-if ! touch storage/logs/.write-test 2>/dev/null; then
-    fail "storage/logs با کاربر $ME قابل نوشتن نیست.
     روی هاست اجرا کنید:
 
-      sudo chown -R \$(id -u):\$(id -g) storage bootstrap/cache
-      sed -i \"s/^UID=.*/UID=\$(id -u)/; s/^GID=.*/GID=\$(id -g)/\" .env
+      sudo chown -R \$(id -u):\$(id -g) storage bootstrap/cache .env
       docker compose up -d --force-recreate"
 fi
 rm -f storage/logs/.write-test
